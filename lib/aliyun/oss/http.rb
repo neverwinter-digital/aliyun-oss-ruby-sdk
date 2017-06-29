@@ -168,7 +168,7 @@ module Aliyun
         if r.code.to_i >= 300
           r.read_body
         else
-        # streaming read body on success
+          # streaming read body on success
           encoding = r['content-encoding']
           if encoding == 'gzip'
             stream = StreamWriter.new { |s| r.read_body { |chunk| s << chunk } }
@@ -262,8 +262,8 @@ module Aliyun
         end
 
         res = {
-          :path => get_resource_path(bucket, object),
-          :sub_res => sub_res,
+            :path => get_resource_path(bucket, object),
+            :sub_res => sub_res,
         }
 
         if @config.access_key_id and @config.access_key_secret
@@ -279,24 +279,23 @@ module Aliyun
         # used to populate the query string are actually taken out of
         # the headers hash."
         headers[:params] = (sub_res || {}).merge(http_options[:query] || {})
-
         block_response = ->(r) { handle_response(r, &block) } if block
-        r = RestClient::Request.execute(
-          :method => verb,
-          :url => get_request_url(bucket, object),
-          :headers => headers,
-          :payload => http_options[:body],
-          :block_response => block_response,
-          :open_timeout => @config.open_timeout || OPEN_TIMEOUT,
-          :timeout => @config.read_timeout || READ_TIMEOUT
-        ) do |response, request, result, &blk|
+        request = RestClient::Request.new(
+            :method => verb,
+            :url => get_request_url(bucket, object),
+            :headers => headers,
+            :payload => http_options[:body],
+            :block_response => block_response,
+            :open_timeout => @config.open_timeout || OPEN_TIMEOUT,
+            :timeout => @config.read_timeout || READ_TIMEOUT)
 
+        r = request.execute do |response, request, result, &blk|
           if response.code >= 300
             e = ServerError.new(response)
             logger.error(e.to_s)
             raise e
           else
-            response.return!(request, result, &blk)
+            response.return!(&blk)
           end
         end
 
@@ -305,13 +304,13 @@ module Aliyun
         unless r.is_a?(RestClient::Response)
           if r.code.to_i >= 300
             r = RestClient::Response.create(
-              RestClient::Request.decode(r['content-encoding'], r.body),
-              r, nil, nil)
+                RestClient::Request.decode(r['content-encoding'], r.body),
+                r, request)
             e = ServerError.new(r)
             logger.error(e.to_s)
             raise e
           end
-          r = RestClient::Response.create(nil, r, nil, nil)
+          r = RestClient::Response.create(nil, r, request)
           r.return!
         end
 
